@@ -18,7 +18,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_LOCATION_NAME, DOMAIN, RADAR_GIF_FRAME_DURATION_MS, RADAR_RADII_KM
+from .const import CONF_CARTO_API_KEY, CONF_LOCATION_NAME, DOMAIN, RADAR_GIF_FRAME_DURATION_MS, RADAR_RADII_KM
 from .coordinator import RainDetectorCoordinator
 from .entity_helpers import device_info_from_entry
 from .radar.composite import render_animated_composite
@@ -204,6 +204,7 @@ class RadarImageEntity(CoordinatorEntity[RainDetectorCoordinator], ImageEntity):
                         session=session,
                         run_in_executor=self.hass.async_add_executor_job,
                         map_style=map_style,
+                        carto_api_key=self._entry.data.get(CONF_CARTO_API_KEY, ""),
                     ),
                     timeout=_RENDER_TIMEOUT_SECONDS,
                 )

@@ -496,3 +496,90 @@ def test_light_styles_are_not_dark():
     """Voyager and OSM Standard are light maps - must use dark text."""
     assert get_style(MapStyle.VOYAGER).is_dark is False
     assert get_style(MapStyle.OSM_STANDARD).is_dark is False
+
+
+@pytest.mark.parametrize("style", [MapStyle.VOYAGER, MapStyle.DARK_MATTER])
+async def test_carto_key_is_sent_as_query_parameter(style):
+    from unittest.mock import AsyncMock, patch
+
+    with patch(
+        "custom_components.rain_incoming.radar.map_styles.fetch_with_retry",
+        new_callable=AsyncMock,
+    ) as fetch:
+        fetch.return_value.read = AsyncMock(return_value=_make_png_bytes())
+        result = await get_style(style, carto_api_key="secret & key").fetch_tile(
+            MagicMock(), 7, 115, 78
+        )
+    assert result is not None
+    assert fetch.call_args.kwargs["params"] == {"key": "secret & key"}
+    assert "secret" not in fetch.call_args.args[1]
+
+
+async def test_carto_key_does_not_reach_other_providers():
+    url = "https://tile.openstreetmap.org/7/115/78.png"
+    session = _mock_session({url: _make_png_bytes()})
+    result = await get_style("osm_standard", carto_api_key="secret").fetch_tile(
+        session, 7, 115, 78
+    )
+    assert result is not None
+    assert session.calls == [url]
+
+
+async def test_carto_key_changes_do_not_reuse_watermarked_cached_tiles():
+    from custom_components.rain_incoming.radar.composite import (
+        _fetch_map_tile, clear_tile_caches,
+    )
+    from unittest.mock import AsyncMock, patch
+
+    clear_tile_caches()
+    try:
+        with patch(
+            "custom_components.rain_incoming.radar.map_styles.fetch_with_retry",
+            new_callable=AsyncMock,
+        ) as fetch:
+            fetch.return_value.read = AsyncMock(return_value=_make_png_bytes())
+            for key in ("", "first", "second", "second"):
+                await _fetch_map_tile(
+                    MagicMock(), 7, 115, 78,
+                    get_style("voyager", carto_api_key=key),
+                )
+        assert fetch.await_count == 3
+    finally:
+        clear_tile_caches()
+
+
+async def test_carto_failure_does_not_log_key(caplog):
+    from unittest.mock import AsyncMock, patch
+
+    with patch(
+        "custom_components.rain_incoming.radar.map_styles.fetch_with_retry",
+        new_callable=AsyncMock,
+        side_effect=RuntimeError("request failed: https://example.com/?key=secret-key"),
+    ):
+        result = await get_style("voyager", carto_api_key="secret-key").fetch_tile(
+            MagicMock(), 7, 115, 78
+        )
+    assert result is None
+    assert "secret-key" not in caplog.text
+    assert "Map tile fetch error" in caplog.text
+
+
+@pytest.mark.parametrize("style,path", [
+    ("voyager", "rastertiles/voyager"), ("dark_matter", "dark_all"),
+])
+async def test_carto_request_encodes_key_and_decodes_tile(style, path):
+    import aiohttp
+    from aioresponses import aioresponses
+    from yarl import URL
+
+    url = URL(f"https://basemaps.cartocdn.com/{path}/7/115/78.png").with_query(
+        key="secret & key"
+    )
+    with aioresponses() as responses:
+        responses.get(url, body=_make_png_bytes())
+        async with aiohttp.ClientSession() as session:
+            result = await get_style(style, carto_api_key="secret & key").fetch_tile(
+                session, 7, 115, 78
+            )
+    assert result is not None
+    assert result.size == (256, 256)

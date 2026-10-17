@@ -260,6 +260,8 @@ async def _fetch_map_tile(
 
     # Cache key includes style so different styles don't share stale tiles.
     cache_key = (style_def.style, zoom, tx, ty)
+    if style_def.credential_cache_key:
+        cache_key += (style_def.credential_cache_key,)
     cached = _get_cached_map_tile(cache_key)
     if cached is not None:
         return cached
@@ -755,6 +757,7 @@ async def render_composite(
     session: aiohttp.ClientSession,
     run_in_executor: object = None,
     map_style: MapStyle | str = MapStyle.VOYAGER,
+    carto_api_key: str = "",
 ) -> bytes:
     """Render a radar composite image as PNG bytes.
 
@@ -765,7 +768,7 @@ async def render_composite(
         to offload CPU-bound rendering. If None, rendering runs inline.
     map_style: base map provider. Defaults to VOYAGER.
     """
-    style_def = get_style(map_style)
+    style_def = get_style(map_style, carto_api_key=carto_api_key)
     vp = _ViewportParams(lat, lon, radius_km, output_size)
     map_crop = await _fetch_map_crop(session, vp, output_size, style_def)
     radar_resized = await _fetch_radar_overlay(session, vp, frame_path, output_size)
@@ -792,6 +795,7 @@ async def fetch_map_crop(
     radius_km: int,
     output_size: int = 640,
     map_style: MapStyle | str = MapStyle.VOYAGER,
+    carto_api_key: str = "",
 ) -> Image.Image:
     """Fetch map tiles for a location and radius. Returns a cropped PIL image.
 
@@ -799,7 +803,7 @@ async def fetch_map_crop(
     preserve existing production behaviour. Pass any MapStyle value or its
     string equivalent (e.g. "osm_dark") to change the map style.
     """
-    style_def = get_style(map_style)
+    style_def = get_style(map_style, carto_api_key=carto_api_key)
     vp = _ViewportParams(lat, lon, radius_km, output_size)
     return await _fetch_map_crop(session, vp, output_size, style_def)
 
@@ -887,6 +891,7 @@ async def render_animated_composite(
     session: aiohttp.ClientSession,
     run_in_executor: object = None,
     map_style: MapStyle | str = MapStyle.VOYAGER,
+    carto_api_key: str = "",
 ) -> bytes:
     """Render an animated GIF compositing multiple radar frames over a static map.
 
@@ -896,7 +901,10 @@ async def render_animated_composite(
     import time as _time
     t0 = _time.monotonic()
 
-    map_crop = await fetch_map_crop(session, lat, lon, radius_km, output_size, map_style)
+    map_crop = await fetch_map_crop(
+        session, lat, lon, radius_km, output_size, map_style,
+        carto_api_key=carto_api_key,
+    )
     t1 = _time.monotonic()
     _LOGGER.debug("render %dkm: map tiles fetched in %.1fs", radius_km, t1 - t0)
 

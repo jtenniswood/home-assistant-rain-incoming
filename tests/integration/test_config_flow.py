@@ -990,3 +990,51 @@ async def test_options_flow_satellite_confidence_toggle(hass: HomeAssistant):
     assert entry.data[CONF_SATELLITE_CONFIDENCE_ENABLED] is True, (
         f"Expected CONF_SATELLITE_CONFIDENCE_ENABLED=True in entry.data, got {entry.data.get(CONF_SATELLITE_CONFIDENCE_ENABLED)!r}"
     )
+
+
+@pytest.mark.parametrize("style", ["voyager", "dark_matter", "osm_standard"])
+async def test_setup_saves_carto_key(hass, style):
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {
+        "location": _loc(), "lookahead_minutes": 60,
+        "map_style": style, "carto_api_key": "  setup-key  ",
+    })
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"]["carto_api_key"] == "setup-key"
+
+
+@pytest.mark.parametrize("new_key", ["replacement-key", ""])
+async def test_options_update_or_clear_carto_key(hass, new_key):
+    entry = MockConfigEntry(domain=DOMAIN, data={
+        **_SYDNEY, "lookahead_minutes": 60, "map_style": "voyager",
+        "carto_api_key": "old-key",
+    }, version=2)
+    await setup_integration(hass, entry, _MOCK_RESULT)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {
+        "lookahead_minutes": 60, "map_style": "dark_matter",
+        "carto_api_key": new_key,
+    })
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.data["carto_api_key"] == new_key
+
+
+def test_carto_key_form_masks_password_and_preserves_defaults():
+    from custom_components.rain_incoming.config_flow import (
+        _build_schema, _resolve_options_schema_defaults,
+    )
+    from homeassistant.helpers.selector import TextSelector
+
+    schemas = [
+        _build_schema(0, 0),
+        _resolve_options_schema_defaults({"carto_api_key": "saved-key"}, None),
+        _resolve_options_schema_defaults({"carto_api_key": "saved-key"}, {
+            "carto_api_key": "typed-key", "lookahead_minutes": 0,
+        }),
+    ]
+    for schema, expected in zip(schemas, ["", "saved-key", "typed-key"]):
+        key = next(k for k in schema.schema if k.schema == "carto_api_key")
+        assert key.default() == expected
+        selector = schema.schema[key]
+        assert isinstance(selector, TextSelector)
+        assert selector.config["type"] == "password"

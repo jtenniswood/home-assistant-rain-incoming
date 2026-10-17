@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.redact import async_redact_data
 
-from .const import DOMAIN
+from .const import CONF_CARTO_API_KEY, DOMAIN
 from .coordinator import RainDetectorCoordinator
 
 
@@ -13,7 +14,7 @@ async def async_get_config_entry_diagnostics(
     coordinator: RainDetectorCoordinator = hass.data[DOMAIN][entry.entry_id]
 
     # Anonymize location (round to 1 decimal - enough for region debugging)
-    data = dict(entry.data)
+    data = async_redact_data(dict(entry.data), {CONF_CARTO_API_KEY})
     if "latitude" in data:
         data["latitude"] = round(data["latitude"], 1)
     if "longitude" in data:

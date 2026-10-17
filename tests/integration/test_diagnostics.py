@@ -98,3 +98,15 @@ async def test_diagnostics_detection_none_when_no_data(hass: HomeAssistant, mock
     diag = await async_get_config_entry_diagnostics(hass, mock_entry)
 
     assert diag["detection"] is None
+
+
+async def test_diagnostics_redacts_carto_key(hass):
+    entry = MockConfigEntry(domain=DOMAIN, data={
+        "latitude": -33.701, "longitude": 151.209,
+        "lookahead_minutes": 60, "carto_api_key": "private-key",
+    }, version=2)
+    await setup_integration(hass, entry, MOCK_RESULT_RAIN)
+    diag = await async_get_config_entry_diagnostics(hass, entry)
+    assert diag["config"]["carto_api_key"] == "**REDACTED**"
+    assert "private-key" not in str(diag)
+    assert entry.data["carto_api_key"] == "private-key"

@@ -178,6 +178,7 @@ async def fetch_with_retry(
     budget: RateLimitBudget | None = None,
     timeout_total: float = 30.0,
     headers: dict[str, str] | None = None,
+    params: dict[str, str] | None = None,
 ) -> aiohttp.ClientResponse:
     """Fetch a URL with retry on 429/5xx, respecting Retry-After headers.
 
@@ -192,7 +193,10 @@ async def fetch_with_retry(
         await _apply_rate_limit_pacing(budget)
 
         try:
-            resp = await session.get(url, timeout=request_timeout, headers=headers)
+            resp = await session.get(
+                url, timeout=request_timeout, headers=headers,
+                **({"params": params} if params is not None else {}),
+            )
         except (asyncio.TimeoutError, aiohttp.ServerTimeoutError):
             if await _handle_timeout(url, attempt, max_retries, base_delay):
                 continue

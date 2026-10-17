@@ -11,9 +11,13 @@ from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
 )
 
 from .const import (
+    CONF_CARTO_API_KEY,
     CONF_FORECAST_CONFIDENCE_ENABLED,
     CONF_LOCATION_NAME,
     CONF_LOOKAHEAD_MINUTES,
@@ -104,6 +108,7 @@ def _build_schema(
     default_lookahead: int = DEFAULT_LOOKAHEAD_MINUTES,
     default_location_name: str = "",
     default_map_style: str = _DEFAULT_MAP_STYLE,
+    default_carto_api_key: str = "",
 ) -> vol.Schema:
     return vol.Schema(
         {
@@ -120,6 +125,9 @@ def _build_schema(
                     translation_key="map_style",
                 )
             ),
+            vol.Optional(CONF_CARTO_API_KEY, default=default_carto_api_key): TextSelector(
+                TextSelectorConfig(type=TextSelectorType.PASSWORD)
+            ),
         }
     )
 
@@ -132,6 +140,7 @@ def _build_options_schema(
     default_map_style: str = _DEFAULT_MAP_STYLE,
     default_forecast_confidence: bool = False,
     default_satellite_confidence: bool = False,
+    default_carto_api_key: str = "",
 ) -> vol.Schema:
     return vol.Schema(
         {
@@ -145,6 +154,9 @@ def _build_options_schema(
                     mode=SelectSelectorMode.DROPDOWN,
                     translation_key="map_style",
                 )
+            ),
+            vol.Optional(CONF_CARTO_API_KEY, default=default_carto_api_key): TextSelector(
+                TextSelectorConfig(type=TextSelectorType.PASSWORD)
             ),
             vol.Optional(CONF_FORECAST_CONFIDENCE_ENABLED, default=default_forecast_confidence): bool,
             vol.Optional(CONF_SATELLITE_CONFIDENCE_ENABLED, default=default_satellite_confidence): bool,
@@ -187,6 +199,8 @@ class RainIncomingConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
+            if CONF_CARTO_API_KEY in user_input:
+                user_input[CONF_CARTO_API_KEY] = user_input[CONF_CARTO_API_KEY].strip()
             _flatten_location(user_input)
             errors = _validate_input(user_input)
             if not errors:
@@ -207,6 +221,7 @@ class RainIncomingConfigFlow(ConfigFlow, domain=DOMAIN):
             default_lookahead=user_input.get(CONF_LOOKAHEAD_MINUTES, DEFAULT_LOOKAHEAD_MINUTES) if user_input else DEFAULT_LOOKAHEAD_MINUTES,
             default_location_name=user_input.get(CONF_LOCATION_NAME, "") if user_input else "",
             default_map_style=user_input.get(CONF_MAP_STYLE, _DEFAULT_MAP_STYLE) if user_input else _DEFAULT_MAP_STYLE,
+            default_carto_api_key=user_input.get(CONF_CARTO_API_KEY, "") if user_input else "",
         )
         return self.async_show_form(
             step_id="user", data_schema=schema, errors=errors
@@ -250,6 +265,7 @@ def _merge_options_into_data(existing_data: dict, user_input: dict) -> dict:
         CONF_LOCATION_NAME,
         CONF_LOOKAHEAD_MINUTES,
         CONF_MAP_STYLE,
+        CONF_CARTO_API_KEY,
         CONF_FORECAST_CONFIDENCE_ENABLED,
         CONF_SATELLITE_CONFIDENCE_ENABLED,
     )
@@ -276,6 +292,7 @@ def _resolve_options_schema_defaults(
             default_lookahead=user_input.get(CONF_LOOKAHEAD_MINUTES, DEFAULT_LOOKAHEAD_MINUTES),
             default_location_name=user_input.get(CONF_LOCATION_NAME, ""),
             default_map_style=user_input.get(CONF_MAP_STYLE, _DEFAULT_MAP_STYLE),
+            default_carto_api_key=user_input.get(CONF_CARTO_API_KEY, current_data.get(CONF_CARTO_API_KEY, "")),
             default_forecast_confidence=user_input.get(CONF_FORECAST_CONFIDENCE_ENABLED, current_data.get(CONF_FORECAST_CONFIDENCE_ENABLED, False)),
             default_satellite_confidence=user_input.get(CONF_SATELLITE_CONFIDENCE_ENABLED, current_data.get(CONF_SATELLITE_CONFIDENCE_ENABLED, False)),
         )
@@ -286,6 +303,7 @@ def _resolve_options_schema_defaults(
         default_lookahead=current_data.get(CONF_LOOKAHEAD_MINUTES, DEFAULT_LOOKAHEAD_MINUTES),
         default_location_name=current_data.get(CONF_LOCATION_NAME, ""),
         default_map_style=current_data.get(CONF_MAP_STYLE, _DEFAULT_MAP_STYLE),
+        default_carto_api_key=current_data.get(CONF_CARTO_API_KEY, ""),
         default_forecast_confidence=current_data.get(CONF_FORECAST_CONFIDENCE_ENABLED, False),
         default_satellite_confidence=current_data.get(CONF_SATELLITE_CONFIDENCE_ENABLED, False),
     )
@@ -306,6 +324,8 @@ class RainIncomingOptionsFlow(OptionsFlow):
         errors: dict[str, str] = {}
 
         if user_input is not None:
+            if CONF_CARTO_API_KEY in user_input:
+                user_input[CONF_CARTO_API_KEY] = user_input[CONF_CARTO_API_KEY].strip()
             errors = _validate_options_input(user_input)
             if not errors:
                 return self._apply_options(user_input)

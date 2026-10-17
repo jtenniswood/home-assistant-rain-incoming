@@ -341,3 +341,19 @@ class TestRateLimitBudget:
         assert applied_timeout.total == 15.0, (
             f"Expected timeout.total=15.0, got {applied_timeout.total}"
         )
+
+
+async def test_query_params_survive_retries_without_logging_secrets(caplog):
+    session = AsyncMock(spec=aiohttp.ClientSession)
+    session.get = AsyncMock(side_effect=[_make_response(429), _make_response(200)])
+    with patch("custom_components.rain_incoming.http_retry.asyncio.sleep", new_callable=AsyncMock):
+        await fetch_with_retry(
+            session, "https://basemaps.cartocdn.com/tile.png",
+            params={"key": "secret & key"},
+        )
+    assert session.get.await_count == 2
+    for call in session.get.call_args_list:
+        assert call.kwargs["params"] == {"key": "secret & key"}
+        assert "secret" not in call.args[0]
+    assert "secret" not in caplog.text
+    assert "Rate limited" in caplog.text

@@ -3,6 +3,7 @@ DOMAIN = "rain_incoming"
 # Config keys (user-facing)
 CONF_LOCATION_NAME = "location_name"
 CONF_LOOKAHEAD_MINUTES = "lookahead_minutes"
+CONF_CARTO_API_KEY = "carto_api_key"
 CONF_MAP_STYLE = "map_style"
 CONF_FORECAST_CONFIDENCE_ENABLED = "forecast_confidence_enabled"
 CONF_SATELLITE_CONFIDENCE_ENABLED = "satellite_confidence_enabled"

@@ -67,6 +67,7 @@ The map defaults to your Home Assistant home location, so for most people you ju
 | Lookahead | 60 min | How far ahead to predict (nowcast window, 20-60 min) |
 | Location name | _(optional)_ | Label shown on radar images and entity names |
 | Map style | CARTO Voyager | Background map used for radar overlays |
+| CARTO basemap API key | Empty | Required for CARTO Voyager and Dark Matter; get a key from [CARTO](https://carto.com/basemaps/apikey/) |
 
 ### Changing settings after setup
 
@@ -325,6 +326,18 @@ Bug reports, feature requests, and PRs are welcome. See [CONTRIBUTING.md](CONTRI
 | Dark Matter | [CARTO](https://carto.com/) | © CARTO, © OpenStreetMap contributors |
 
 OpenStreetMap data is available under the [Open Database License](https://opendatacommons.org/licenses/odbl/).
+**CARTO API key:** CARTO Voyager (the default) and Dark Matter require a
+basemap API key. Request one at [CARTO's key page](https://carto.com/basemaps/apikey/)
+and paste it into **CARTO basemap API key** during setup. For an existing
+installation, go to **Settings > Devices & services > Rain Incoming > Configure**
+and enter the key there. Save the settings to reload the integration and fetch
+fresh tiles. Enter the key itself, without a `?key=` prefix.
+
+If your map shows an **API key required** watermark, add your key using those
+steps. To use maps without a CARTO key, choose **OpenStreetMap**,
+**OpenStreetMap Dark**, or **ESRI Satellite Imagery** instead. The key is only
+sent to CARTO; it is masked in the form and redacted from diagnostic downloads.
+
 CARTO tiles are provided under [CARTO's basemap service terms](https://carto.com/legal/).
 
 These attributions are also displayed on every radar image rendered by the integration.

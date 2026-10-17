@@ -8,7 +8,9 @@ styles can be added without changing the compositing pipeline.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
+from functools import partial
+from hashlib import sha256
 from enum import StrEnum
 from io import BytesIO
 from typing import Awaitable, Callable
@@ -50,13 +52,16 @@ class MapStyleDefinition:
     attribution: str
     fetch_tile: FetchTileFn
     is_dark: bool = False
+    credential_cache_key: str = field(default="", repr=False)
 
 
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
 
-async def _fetch_png(session: aiohttp.ClientSession, url: str) -> Image.Image | None:
+async def _fetch_png(
+    session: aiohttp.ClientSession, url: str, *, api_key: str = ""
+) -> Image.Image | None:
     """Fetch a PNG tile URL and return it as an RGBA PIL Image, or None on failure.
 
     Uses fetch_with_retry for 429/5xx retry with exponential backoff.
@@ -67,6 +72,7 @@ async def _fetch_png(session: aiohttp.ClientSession, url: str) -> Image.Image | 
     try:
         resp = await fetch_with_retry(
             session, url, headers={"User-Agent": _USER_AGENT},
+            **({"params": {"key": api_key}} if api_key else {}),
         )
         data = await resp.read()
         return Image.open(BytesIO(data)).convert("RGBA")
@@ -77,7 +83,7 @@ async def _fetch_png(session: aiohttp.ClientSession, url: str) -> Image.Image | 
         return None
     except Exception as exc:
         _LOGGER.warning(
-            "Map tile fetch error: %s: %s for %s", type(exc).__name__, exc, url
+            "Map tile fetch error: %s for %s", type(exc).__name__, url
         )
         return None
 
@@ -107,10 +113,11 @@ def _apply_osm_dark_transform(img: Image.Image) -> Image.Image:
 # ---------------------------------------------------------------------------
 
 async def _fetch_voyager(
-    session: aiohttp.ClientSession, z: int, x: int, y: int
+    session: aiohttp.ClientSession, z: int, x: int, y: int, *, api_key: str = ""
 ) -> Image.Image | None:
     return await _fetch_png(
-        session, f"https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
+        session, f"https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+        api_key=api_key,
     )
 
 
@@ -128,10 +135,11 @@ async def _fetch_osm_dark(
 
 
 async def _fetch_dark_matter(
-    session: aiohttp.ClientSession, z: int, x: int, y: int
+    session: aiohttp.ClientSession, z: int, x: int, y: int, *, api_key: str = ""
 ) -> Image.Image | None:
     return await _fetch_png(
-        session, f"https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"
+        session, f"https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        api_key=api_key,
     )
 
 
@@ -208,7 +216,7 @@ _STYLES: dict[MapStyle, MapStyleDefinition] = {
 }
 
 
-def get_style(style: MapStyle | str) -> MapStyleDefinition:
+def get_style(style: MapStyle | str, *, carto_api_key: str = "") -> MapStyleDefinition:
     """Lookup a MapStyleDefinition by enum or string value.
 
     Raises ValueError for unrecognised style names.
@@ -222,4 +230,11 @@ def get_style(style: MapStyle | str) -> MapStyleDefinition:
             ) from exc
     if style not in _STYLES:
         raise ValueError(f"Unknown map style: {style!r}")
-    return _STYLES[style]
+    definition = _STYLES[style]
+    if carto_api_key and style in (MapStyle.VOYAGER, MapStyle.DARK_MATTER):
+        return replace(
+            definition,
+            fetch_tile=partial(definition.fetch_tile, api_key=carto_api_key),
+            credential_cache_key=sha256(carto_api_key.encode()).hexdigest(),
+        )
+    return definition

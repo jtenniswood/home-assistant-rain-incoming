@@ -700,3 +700,18 @@ class TestRenderTimeout:
             f"Render timeout must be 55s to give more headroom for slow tiles "
             f"while staying under HA's ~60s proxy timeout. Got {_RENDER_TIMEOUT_SECONDS}s."
         )
+
+
+async def test_render_uses_saved_carto_key():
+    entity = _make_entity()
+    entity._entry.data["carto_api_key"] = "saved-key"
+    with patch(
+        "custom_components.rain_incoming.image.render_animated_composite",
+        new_callable=AsyncMock, return_value=b"GIF89a_test",
+    ) as render, patch(
+        "custom_components.rain_incoming.image.async_get_clientsession",
+        return_value=MagicMock(),
+    ):
+        await entity._render_to_cache()
+    assert render.call_args.kwargs["carto_api_key"] == "saved-key"
+    assert entity._cached_image == b"GIF89a_test"
